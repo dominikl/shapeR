@@ -183,10 +183,10 @@
   return(im.out)
 }
 
-.shapeR.find.outline=function(skra,threshold=.15,mouse.click=F,main=NA,display.images=F)
+.shapeR.find.outline=function(image,threshold=.15,mouse.click=F,main=NA,display.images=F,create_rois=F)
 {
-  #M<- read.pnm(skra) # skra innan ""
-  M<- readJPEG(skra) # skra innan ""
+  pix <- getPixelValues(image, 1, 1, 1)
+  M <- t(pix)
   if(length(dim(M))>2){
     M<- suppressWarnings(pixmapRGB(M[,,1:3]))
     M<- as(M, "pixmapGrey")
@@ -214,6 +214,34 @@
   Rc<-.shapeR.Conte(c(round(start$x),round(start$y)),M@grey)
   if(mouse.click == T || display.images==T)
     lines(Rc$X, Rc$Y, lwd=2,col="red")
+  
+  if (create_rois) {
+    xs <- Rc$X
+    ys <- Rc$Y
+    height <- dim(pix)[[2]]
+    ps <- ""
+    for (i in 1:length(xs)) {
+      ps <- paste(ps, paste(xs[[i]], height - ys[[i]] - 1, sep=","), sep = " ")
+    }
+    
+    shape <- .jnew(class = "omero/gateway/model/PolygonData")
+    ishape <- .jcast(shape$asIObject(), new.class = "omero/model/Polygon")
+    ips <- J("omero/rtypes")$rstring(ps)
+    ishape$setPoints(ips)
+    
+    roi <- .jnew(class = "omero.gateway.model.ROIData")
+    roi$setImage(image@dataobject$asImage())
+    roi$addShapeData(shape)
+    
+    rois <- .jnew(class = "java.util.ArrayList")
+    rois$add(roi)
+    
+    gateway <- getGateway(image@server)
+    ctx <- getContext(image@server)
+    
+    fac <- gateway$getFacility(ROIFacility$class)
+    fac$saveROIs(ctx, .jlong(getOMEROID(image)), rois)
+  }
   return(Rc)
 }
 

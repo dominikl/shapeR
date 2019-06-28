@@ -6,6 +6,7 @@
 #' @import methods
 #' @import vegan
 #' @import MASS
+#' @import romero.gateway
 
 
 #' @title shapeR
@@ -17,8 +18,8 @@ NULL
 
 #' @title A constructor for the shapeR class
 #' @description a shapeR class
-#' @slot project.path Path to the project where the images are stored
-#' @slot info.file Info file containing fish and otolith information
+#' @slot project OMERO Project
+#' @slot csv_file_id The ID of the CSV file
 #' @slot master.list.org The contents of the \code{info.file}
 #' @slot master.list The contents of the \code{info.file} with added shape parameters and descriptors
 #' @slot outline.list.org A list of all the original otolith outlines
@@ -131,8 +132,9 @@ NULL
 #' @exportClass shapeR
 #' @rdname shapeR
 setClass("shapeR", 
-         representation(project.path="character",
-                        info.file="character",outline.list.org="list",outline.list="list",filter="vector",
+         representation(project="Project",
+                        csv_file_id="integer",
+                        outline.list.org="list",outline.list="list",filter="vector",
                         fourier.coef="matrix",wavelet.coef="matrix",
                         fourier.coef.std="matrix",wavelet.coef.std="matrix",
                         fourier.coef.std.removed="vector",wavelet.coef.std.removed="vector",
@@ -146,15 +148,14 @@ setClass("shapeR",
          )
 
 #' @export shapeR
-#' @param project.path The base project path where the images are stored
-#' @param info.file The information file which store the information on the fish and otoliths. This is the base for the master.list
 #' @param ... Additional parameters to be passed to 'read.csv' for reading the info.file
 #' @rdname shapeR
 
-shapeR <- function(project.path,info.file,...)
+shapeR <- function(project,csv_file_id,...)
 {
-  shape = new("shapeR",project.path=project.path,info.file=info.file)
-  shape@master.list.org = read.csv(paste(project.path,info.file,sep="/"),header=T,...)
+  shape = new("shapeR",project=project,csv_file_id=csv_file_id)
+  server <- project@server
+  shape@master.list.org = loadCSV(server, csv_file_id, header=T)
   return(shape)
 }
 
@@ -163,12 +164,12 @@ shapeR <- function(project.path,info.file,...)
 #' @exportMethod show
 #' @title Show a shapeR object
 #' @param object a shapeR oject
-#' @description Show the project.path and info.file, the number of outlines that have been read and which fundamental methods have been run.
+#' @description Show the project, the number of outlines that have been read and which fundamental methods have been run.
 #' @rdname show
 setMethod("show", "shapeR", 
           function(object){
             cat(class(object), "instance with", sum(sapply(object@outline.list,length)), 
-                "outlines in project path:\n",object@project.path,"\n")
+                "outlines in project:\n",object@project$getName(),"\n")
             if( length(object@shape.coef.raw) == 0 )
               cat("generateShapeCoefficients has not been run\n")
             else
@@ -184,13 +185,6 @@ setMethod("show", "shapeR",
 
 setValidity("shapeR",
             function(object) {
-              #Check if the project.path is valid
-              if(!file.exists(object@project.path))
-                FALSE
-              #Check if the info file exists
-              if(!file.exists(object@info.file))
-                FALSE
-              
               TRUE
             }
 )
@@ -365,22 +359,19 @@ generateShapeCoefficients <- function(object,...) {
 #' @references Bivand, R., Leisch, F. & Maechler, M. (2011) \code{\link{pixmap}}: Bitmap Images (''Pixel Maps''). R package version 0.4-11.
 #' @references Libungan LA and Palsson S (2015) ShapeR: An R Package to Study Otolith Shape Variation among Fish Populations. PLoS ONE 10(3): e0121102. \url{http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0121102}
 detect.outline <- 
-  function(object,threshold=0.2,mouse.click=FALSE,display.images=FALSE,write.outline.w.org = FALSE)
+  function(object,threshold=0.2,mouse.click=FALSE,display.images=FALSE,create_rois=FALSE)
 {
-    fix.image.path = paste(object@project.path,"Fixed",sep="/")
-    w.dir = getwd()
-            
-    setwd(fix.image.path)
-    dnames = list.dirs('.',full.names=TRUE)
-    dnames = gsub("[.|/]","", dnames[-1]) 
+    datasets <- getDatasets(object@project)
             
     total=0
     total.images=0
-    for (dname in dnames)
+    for (ds in datasets)
     {
-      fnames = list.files(dname,pattern="\\.(jpg|jpeg|png)",ignore.case=T)
-      for (fname in fnames)
+      dname <- ds@dataobject$getName()
+      images <- getImages(ds)
+      for (im in images)
       {
+        fname <- im@dataobject$getName()
         strip.fname = gsub(".(jpg|jpeg|png)","",fname,ignore.case=T) 
         total.images = total.images+1                
         if((!(dname %in% names(object@outline.list)) || !(strip.fname %in% names(object@outline.list[[dname]])) ))
@@ -402,22 +393,20 @@ detect.outline <-
     ptotal=0
     tryCatch(
       {
-        for (dname in dnames)
+        for (ds in datasets)
         {
-          fnames = list.files(dname,pattern="\\.(jpg|jpeg)",ignore.case=T)
-          for (fname in fnames)
+          dname <- ds@dataobject$getName()
+          images <- getImages(ds)
+          for (im in images)
           {
+            fname <- im@dataobject$getName()
             strip.fname = gsub(".(jpg|jpeg)","",fname,ignore.case=T) 
             if((!(dname %in% names(object@outline.list)) || !(strip.fname %in% names(object@outline.list[[dname]])) ))
             {
-              Rc = .shapeR.find.outline(paste(dname,fname,sep="/"),threshold=threshold,main=paste(dname,fname),mouse.click=mouse.click,display.images=display.images)
+              Rc = .shapeR.find.outline(im,threshold=threshold,main=paste(dname,fname),mouse.click=mouse.click,display.images=display.images,create_rois=create_rois)
               M = cbind(Rc$X,Rc$Y) # Bind together x and y coordinates
               object@outline.list.org[[dname]][[strip.fname]] <- Rc
               object@outline.list[[dname]][[strip.fname]] <- Rc
-              if(write.outline.w.org){
-                write.image.with.outline(object,folder=dname,fname=strip.fname,doProgress=F)
-              }
-              
               ptotal=ptotal+1
               setTxtProgressBar(pb, ptotal, label=paste(dname,fname,sep="/"))
             }
@@ -432,154 +421,10 @@ detect.outline <-
          },
       finally={
         close(pb);
-        setwd(w.dir);
         return(object)
       }
       )
 }
-
-
-#' @title Write outlines on top of the original images for quality checking
-#' @description A function which writes the outlines which were extracted from the images in the folder "Fixed" on top of the corresponding images in the "Original" folder. Viewing the resulted images in the folder "Original_with_outlines" is a good quality check to ensure the correct outline has been extracted. If the outline is not correct, then the image can be fixed in an image software, such as GIMP (www.gimp.org), placed in the "Fixed" folder and then the \code{detect.outline} step is repeated.
-#' The function \code{\link{detect.outline}} calls this function if the parameter \code{write.outline.w.org} is set to \code{TRUE}.
-#' @usage write.image.with.outline(object, folder = NA, fname = NA, doProgress = T)
-#' @param object A \code{\linkS4class{shapeR}} object
-#' @param folder The folder name where the image is stored
-#' @param fname Image file name. Not including the extension ".jpg"
-#' @param doProgress If TRUE, a progressbar is shown
-#' @examples
-#'\dontrun{
-#'#Use test data from Libungan and Palsson (2015) and run the following lines:
-#'shape = shapeR("ShapeAnalysis/","FISH.csv")
-#'shape = detect.outline(shape,write.outline.w.org = FALSE)
-#'write.image.with.outline(shape)}
-#' @rdname write.image.with.outline
-#' @export write.image.with.outline
-#' @author Lisa Anne Libungan
-#' @references Libungan LA and Palsson S (2015) ShapeR: An R Package to Study Otolith Shape Variation among Fish Populations. PLoS ONE 10(3): e0121102. \url{http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0121102}
-write.image.with.outline <- 
-  function(object,folder=NA,fname=NA,doProgress=T)
-{
-    image.path = paste(object@project.path,"Original",sep="/")
-    write.image.path = paste(object@project.path,"Original_with_outline",sep="/")
-    if(!file.exists(write.image.path)){
-      dir.create(write.image.path)
-    }
-            
-    w.dir = getwd()
-    setwd(image.path)
-            
-    stocks = c(folder)
-    if(is.na(folder))
-      stocks = names(object@outline.list)
-            
-    total=0
-    for (dname in stocks)
-    {
-      total = total + length(object@outline.list[[dname]])
-    }
-    
-    if(doProgress)
-      pb <- txtProgressBar(min = 0, max = total, initial = 0, char = "=",style=3,
-                         width = NA, title="write.image.with.outline")
-    
-    ptotal=0
-            
-            
-    par(mfrow = c(1,1))
-            
-    tryCatch( {
-      for( dname in stocks){
-        fnames = c(fname)
-        if(is.na(fname))
-          fnames = names(object@outline.list[[dname]])
-                
-        dname_woutline = paste(write.image.path,"/",dname,sep="")
-        if(!file.exists(dname_woutline)){
-          dir.create(dname_woutline)
-        }
-                
-        for(f.name in fnames){
-          skra = paste(dname,"/",f.name,".jpg",sep="")
-                  
-          if(file.exists(skra) ){
-            #M=read.pnm(skra)
-            M<- readJPEG(skra)
-            if(length(dim(M))>2){
-              M<- suppressWarnings(pixmapRGB(M[,,1:3]))
-              M<- as(M, "pixmapGrey")
-            }
-            else{
-              M<- suppressWarnings(pixmapGrey(M))
-            }
-            png(paste(dname_woutline,"/",f.name,".png",sep=""),res=200,width=1000,height=1000)
-            plot(M,main=paste(dname,f.name,sep="   "))
-            with(object@outline.list[[dname]][[f.name]],lines(X,Y,col="red",lwd=2))
-            dev.off()
-            ptotal=ptotal+1
-
-            if(doProgress)
-              setTxtProgressBar(pb, ptotal, label=paste(dname,f.name,sep="/"))
-          }
-        }
-      }
-      },
-      finally={
-        setwd(w.dir);
-        if(doProgress)
-          close(pb);
-      }
-      )
-}
-
-#' @title Show the extracted outline on top of the original image
-#' @description A function which displayes the outlines which were extracted from the image in the "Fixed" folder on top of the corresponding image in the "Original" folder.
-#' @usage show.original.with.outline(object, folder, fname)
-#' @param object A \code{\linkS4class{shapeR}} object
-#' @param folder The folder name where the image is stored
-#' @param fname Image file name. Not including the extension ".jpg"
-#' @references Libungan LA and Palsson S (2015) ShapeR: An R Package to Study Otolith Shape Variation among Fish Populations. PLoS ONE 10(3): e0121102. \url{http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0121102}
-#' @examples
-#'\dontrun{
-#'#Follow the example in Libungan and Palsson (2015) and run the following lines:
-#'show.original.with.outline(shape,"IC","403_2")}
-#' @rdname show.original.with.outline
-#' @export show.original.with.outline
-#' @author Lisa Anne Libungan
-show.original.with.outline <- 
-  function(object,folder,fname)
-  {
-    image.path = paste(object@project.path,"Original",sep="/")
-    
-    w.dir = getwd()
-    setwd(image.path)
-          
-    par(mfrow = c(1,1))
-    
-    tryCatch( {
-
-      skra = paste(folder,"/",fname,".jpg",sep="")
-        
-      if(file.exists(skra) ){
-        #M=read.pnm(skra)
-        M<- readJPEG(skra)
-        if(length(dim(M))>2){
-          M<- suppressWarnings(pixmapRGB(M[,,1:3]))
-          M<- as(M, "pixmapGrey")
-        }
-        else{
-          M<- suppressWarnings(pixmapGrey(M))
-        }
-        plot(M,main=paste(folder,fname,sep="   "))
-        with(object@outline.list[[folder]][[fname]],lines(X,Y,col="red",lwd=2))
-        
-      }
-    },
-    finally={
-      setwd(w.dir);
-    }
-    )
-  }
 
 #' @title Contour smoothing
 #' @description Remove high frequency pixel noise around the otolith outline
@@ -928,7 +773,8 @@ stdCoefs <-
 #' @export read.master.list
 #' @author Lisa Anne Libungan
 read.master.list <- function(object,...) {
-  object@master.list.org = read.csv(paste(object@project.path,object@info.file,sep="/"),header=T,...)
+  server <- object@project@server
+  object@master.list.org = loadCSV(server, object@csv_file_id, header=T)
   return(object)
 }
 
@@ -1455,8 +1301,6 @@ remove.outline <-
 #'
 #' The class slot's are as follows:
 #' \itemize{
-#'   \item project.path. A path as "ShapeAnalysis/"
-#'   \item info.file. A file as FISH.csv. The information is stored in the data frame master.list
 #'   \item outline.list. A list with three elements (IC, NO, SC) which give a list of the otolith outlines
 #'   \item filter. A logical vector showing which elements of the master list have valid otoliths
 #'   \item fourier.coef. A matrix of the Normalized Elliptic Fourier coefficients
