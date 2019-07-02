@@ -7,10 +7,7 @@
 \alias{shapeR-class}
 \title{shapeR}
 \usage{
-shapeR(project, csv_file_id, ...)
-}
-\arguments{
-\item{...}{Additional parameters to be passed to 'read.csv' for reading the info.file}
+shapeR(project, csv_file_id = NA, ...)
 }
 \value{
 a \code{\linkS4class{shapeR}} object

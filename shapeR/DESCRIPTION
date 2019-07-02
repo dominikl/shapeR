@@ -1,8 +1,8 @@
 Package: shapeRO
 Type: Package
 Title: Collection and Analysis of Otolith Shape Data (OMERO)
-Version: 0.1.0
-Date: 2019-06-28
+Version: 0.1.1
+Date: 2019-07-01
 Authors@R: c(person("Dominik", "Lindner", role = c("ctb"), 
   email = "d.lindner@dundeeac.uk"),
   person("Lisa Anne", "Libungan", role = c("aut", "cre"), 
