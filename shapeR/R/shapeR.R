@@ -148,13 +148,24 @@ setClass("shapeR",
          )
 
 #' @export shapeR
-#' @param ... Additional parameters to be passed to 'read.csv' for reading the info.file
 #' @rdname shapeR
-
-shapeR <- function(project,csv_file_id,...)
+shapeR <- function(project,csv_file_id=NA,...)
 {
-  shape = new("shapeR",project=project,csv_file_id=csv_file_id)
+  shape = new("shapeR",project=project)
   server <- project@server
+  if (is.na(csv_file_id)) {
+    tryCatch({
+      fannos <- getAnnotations(project, 'FileAnnotation')
+      csv_annos <- subset(fannos, grepl(".csv$", fannos$Name))
+      if (nrow(csv_annos) == 0)
+        stop("No CSV file attached to the project.")
+    }, error = function(e) {
+      stop("No CSV file attached to the project.")
+    })
+    if (nrow(csv_annos) > 1)
+      warning('More than one CSV file attached to the project, using random one.')
+    csv_file_id <- as.integer(csv_annos$FileID[1])
+  }
   shape@master.list.org = loadCSV(server, csv_file_id, header=T)
   return(shape)
 }
@@ -393,6 +404,8 @@ detect.outline <-
     ptotal=0
     tryCatch(
       {
+        ml <- object@master.list.org
+        ml$Image <- NA
         for (ds in datasets)
         {
           dname <- ds@dataobject$getName()
@@ -407,11 +420,14 @@ detect.outline <-
               M = cbind(Rc$X,Rc$Y) # Bind together x and y coordinates
               object@outline.list.org[[dname]][[strip.fname]] <- Rc
               object@outline.list[[dname]][[strip.fname]] <- Rc
+
+              ml$Image[which(ml$folder == as.character(dname) & ml$picname == as.character(strip.fname))] <- as.integer(im@dataobject$getId())
+              
               ptotal=ptotal+1
               setTxtProgressBar(pb, ptotal, label=paste(dname,fname,sep="/"))
             }
           }
-                  
+          object@master.list.org <- ml
         }
       },error = function(e) 
         {message(paste("Error. directory:",dname,", filename:",fname,sep=" "));
