@@ -16,6 +16,12 @@ detect.outline(object, threshold=0.2, mouse.click=FALSE,
 
 \item{display.images}{If TRUE, each image is displayed and the user can visualize how the outline is captured}
 
+\item{create_rois}{Pass TRUE to add the outline as polygon ROI to the image (default: FALSE)}
+
+\item{folder_name}{The header of the folder_name column (default: folder)}
+
+\item{pic_name}{The header of the pic_name column (default: picname)}
+
 \item{write.outline.w.org}{If TRUE, the outline is written on top of the original image using the function \code{\link{write.image.with.outline}}, and can be seen in the \code{Original_with_outline} folder}
 }
 \value{
