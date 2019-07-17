@@ -11,9 +11,9 @@ enrich.master.list(object, folder_name = "folder", pic_name = "picname",
 \arguments{
 \item{object}{A \code{\linkS4class{shapeR}} object}
 
-\item{folder_name}{Should contain the first letters of the area and the serie or station number of the sample, for example: "IC"}
+\item{folder_name}{The header of the folder_name column (default: folder)}
 
-\item{pic_name}{Should contain the serie number of a given sample and fish number, for example "403_2" (not including the .jpg extension)}
+\item{pic_name}{The header of the pic_name column (default: picname)}
 
 \item{calibration}{The name of the column where the pixels to measurement calibration is located}
 

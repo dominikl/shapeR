@@ -355,6 +355,9 @@ generateShapeCoefficients <- function(object,...) {
 #' @param mouse.click If TRUE, the user clicks where the starting point for the otolith contour extraction algorithm should start. Default is the center of the image. Could be good to set as TRUE if the otolith detection produces an error.
 #' @param display.images If TRUE, each image is displayed and the user can visualize how the outline is captured
 #' @param write.outline.w.org If TRUE, the outline is written on top of the original image using the function \code{\link{write.image.with.outline}}, and can be seen in the \code{Original_with_outline} folder
+#' @param folder_name The header of the folder_name column (default: folder)
+#' @param pic_name The header of the pic_name column (default: picname)
+#' @param create_rois Pass TRUE to add the outline as polygon ROI to the image (default: FALSE)
 #' @return A \code{\linkS4class{shapeR}} object with otolith outlines in the slot outline.list
 #' @examples
 #'\dontrun{
@@ -370,8 +373,12 @@ generateShapeCoefficients <- function(object,...) {
 #' @references Bivand, R., Leisch, F. & Maechler, M. (2011) \code{\link{pixmap}}: Bitmap Images (''Pixel Maps''). R package version 0.4-11.
 #' @references Libungan LA and Palsson S (2015) ShapeR: An R Package to Study Otolith Shape Variation among Fish Populations. PLoS ONE 10(3): e0121102. \url{http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0121102}
 detect.outline <- 
-  function(object,threshold=0.2,mouse.click=FALSE,display.images=FALSE,create_rois=FALSE)
+  function(object,threshold=0.2,mouse.click=FALSE,display.images=FALSE,create_rois=FALSE,folder_name="folder",pic_name="picname")
 {
+    ml <- object@master.list.org
+    folder_index <- match(folder_name, colnames(ml))
+    pic_index <- match(pic_name, colnames(ml))
+    
     datasets <- getDatasets(object@project)
             
     total=0
@@ -404,7 +411,6 @@ detect.outline <-
     ptotal=0
     tryCatch(
       {
-        ml <- object@master.list.org
         ml$Image <- NA
         for (ds in datasets)
         {
@@ -421,7 +427,7 @@ detect.outline <-
               object@outline.list.org[[dname]][[strip.fname]] <- Rc
               object@outline.list[[dname]][[strip.fname]] <- Rc
 
-              ml$Image[which(ml$folder == as.character(dname) & ml$picname == as.character(strip.fname))] <- as.integer(im@dataobject$getId())
+              ml$Image[which(ml[folder_index] == as.character(dname) & ml[pic_index] == as.character(strip.fname))] <- as.integer(im@dataobject$getId())
               
               ptotal=ptotal+1
               setTxtProgressBar(pb, ptotal, label=paste(dname,fname,sep="/"))
@@ -493,8 +499,8 @@ smoothout <- function(object,n=100)
 #'                    calibration = "cal", include.wavelet = TRUE, include.fourier = TRUE, 
 #'                    n.wavelet.levels = 5, n.fourier.freq = 12,...)
 #' @param object A \code{\linkS4class{shapeR}} object
-#' @param folder_name Should contain the first letters of the area and the serie or station number of the sample, for example: "IC"
-#' @param pic_name Should contain the serie number of a given sample and fish number, for example "403_2" (not including the .jpg extension)
+#' @param folder_name The header of the folder_name column (default: folder)
+#' @param pic_name The header of the pic_name column (default: picname)
 #' @param calibration The name of the column where the pixels to measurement calibration is located
 #' @param include.wavelet If TRUE, the wavelet coefficient are included in the master.list
 #' @param include.fourier If TRUE then the Normalized Elliptic Fourier coefficients are included in the master.list
